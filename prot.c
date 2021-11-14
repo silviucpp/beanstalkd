@@ -1364,7 +1364,7 @@ dispatch_cmd(Conn *c)
         else
         {
             *pri_buf = '\0';
-            if (!name_is_ok(name, 200)) return reply_msg(c, MSG_BAD_FORMAT);
+            if (!is_valid_tube(name, MAX_TUBE_NAME_LEN - 1)) return reply_msg(c, MSG_BAD_FORMAT);
             TUBE_ASSIGN(t, tube_find_or_make(name));
             if (!t) return reply_serr(c, MSG_OUT_OF_MEMORY);
         }
