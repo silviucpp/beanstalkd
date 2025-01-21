@@ -1330,7 +1330,7 @@ dispatch_cmd(Conn *c)
             r = read_tube_name(&name, c->cmd + 12, &pri_buf);
             if (r) return reply_msg(c, MSG_BAD_FORMAT);
         }
-        if (read_u32(&pri, &pri_buf, &delay_buf) ||
+        if (read_u32(&pri, pri_buf, &delay_buf) ||
             read_duration(&delay, delay_buf, &ttr_buf) ||
             read_duration(&ttr, ttr_buf, &size_buf) ||
             read_u32(&body_size, size_buf, &end_buf)) {
