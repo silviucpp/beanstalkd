@@ -595,7 +595,7 @@ enqueue_reserved_jobs(Conn *c)
 }
 
 static int
-kick_buried_job(Server *s, Job *j)
+kick_buried_job(Server *s, Job *j, int64 delay)
 {
     int r;
     int z;
@@ -608,7 +608,7 @@ kick_buried_job(Server *s, Job *j)
     remove_buried_job(j);
 
     j->r.kick_ct++;
-    r = enqueue_job(s, j, 0, 1);
+    r = enqueue_job(s, j, delay, 1);
     if (r == 1)
         return 1;
 
@@ -671,7 +671,7 @@ kick_buried_jobs(Server *s, Tube *t, uint n)
 {
     uint i;
     for (i = 0; (i < n) && buried_job_p(t); ++i) {
-        kick_buried_job(s, t->buried.next);
+        kick_buried_job(s, t->buried.next, 0);
     }
     return i;
 }
@@ -1677,10 +1677,23 @@ dispatch_cmd(Conn *c)
         return;
 
     case OP_KICKJOB:
-        if (read_u64(&id, c->cmd + CMD_KICKJOB_LEN, NULL)) {
+        if (read_u64(&id, c->cmd + CMD_KICKJOB_LEN, &delay_buf)) {
             reply_msg(c, MSG_BAD_FORMAT);
             return;
         }
+
+        if(delay_buf[0] == '\0')
+        {
+            delay = 0;
+        }
+        else
+        {
+            if(read_duration(&delay, delay_buf, NULL))
+            {
+                reply_msg(c, MSG_BAD_FORMAT);
+                return;
+            }
+        }    
 
         op_ct[type]++;
 
@@ -1690,7 +1703,7 @@ dispatch_cmd(Conn *c)
             return;
         }
 
-        if ((j->r.state == Buried && kick_buried_job(c->srv, j)) ||
+        if ((j->r.state == Buried && kick_buried_job(c->srv, j, delay)) ||
             (j->r.state == Delayed && kick_delayed_job(c->srv, j))) {
             reply_msg(c, MSG_KICKED);
         } else {
