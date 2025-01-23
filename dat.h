@@ -366,6 +366,8 @@ int make_server_socket(char *host, char *port);
 #define CONN_TYPE_WORKER   2
 #define CONN_TYPE_WAITING  4
 
+#define CONN_CAPS_JOBS_WITH_TUBE 1
+
 struct Conn {
     Server *srv;
     Socket sock;
@@ -378,6 +380,7 @@ struct Conn {
     byte   in_conns;    // 1 if the conn is in srv->conns heap, 0 otherwise
     Job    *soonest_job;// memoization of the soonest job
     int    rw;          // currently want: 'r', 'w', or 'h'
+    uint32 caps;        // client capabilities
 
     // How long client should "wait" for the next job; -1 means forever.
     int    pending_timeout;

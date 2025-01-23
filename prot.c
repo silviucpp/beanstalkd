@@ -25,6 +25,7 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
     "abcdefghijklmnopqrstuvwxyz" \
     "0123456789-+/;.$_()"
 
+#define CMD_SET_CAPABILITIES "set-caps "
 #define CMD_PUT "put "
 #define CMD_PUT_IN_TUBE "put-in-tube "
 #define CMD_PEEKJOB "peek "
@@ -77,6 +78,7 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
 #define CMD_LIST_TUBES_WATCHED_LEN CONSTSTRLEN(CMD_LIST_TUBES_WATCHED)
 #define CMD_STATS_TUBE_LEN CONSTSTRLEN(CMD_STATS_TUBE)
 #define CMD_PAUSE_TUBE_LEN CONSTSTRLEN(CMD_PAUSE_TUBE)
+#define CMD_SET_CAPABILITIES_LEN CONSTSTRLEN(CMD_SET_CAPABILITIES)
 
 #define MSG_FOUND "FOUND"
 #define MSG_NOTFOUND "NOT_FOUND\r\n"
@@ -91,6 +93,7 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
 #define MSG_BURIED_FMT "BURIED %"PRIu64"\r\n"
 #define MSG_INSERTED_FMT "INSERTED %"PRIu64"\r\n"
 #define MSG_NOT_IGNORED "NOT_IGNORED\r\n"
+#define MSG_OK "OK\r\n"
 
 #define MSG_OUT_OF_MEMORY "OUT_OF_MEMORY\r\n"
 #define MSG_INTERNAL_ERROR "INTERNAL_ERROR\r\n"
@@ -137,7 +140,8 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
 #define OP_KICKJOB 24
 #define OP_RESERVE_JOB 25
 #define OP_PUT_IN_TUBE 26
-#define TOTAL_OPS 27
+#define OP_SET_CAPABILITIES 27
+#define TOTAL_OPS 28
 
 #define STATS_FMT "---\n" \
     "current-jobs-urgent: %" PRIu64 "\n" \
@@ -145,6 +149,7 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
     "current-jobs-reserved: %" PRIu64 "\n" \
     "current-jobs-delayed: %u\n" \
     "current-jobs-buried: %" PRIu64 "\n" \
+    "cmd-set-caps: %" PRIu64 "\n" \
     "cmd-put: %" PRIu64 "\n" \
     "cmd-put-in-tube: %" PRIu64 "\n" \
     "cmd-peek: %" PRIu64 "\n" \
@@ -281,6 +286,7 @@ static const char * op_names[] = {
     CMD_KICKJOB,
     CMD_RESERVE_JOB,
     CMD_PUT_IN_TUBE,
+    CMD_SET_CAPABILITIES,
 };
 
 static Job *remove_ready_job(Job *j);
@@ -392,8 +398,11 @@ reply_job(Conn *c, Job *j, const char *msg)
 {
     c->out_job = j;
     c->out_job_sent = 0;
-    reply_line(c, STATE_SEND_JOB, "%s %"PRIu64" %u\r\n",
-               msg, j->r.id, j->r.body_size - 2);
+
+    if(c->caps & CONN_CAPS_JOBS_WITH_TUBE)
+        reply_line(c, STATE_SEND_JOB, "%s %"PRIu64" %u %s\r\n", msg, j->r.id, j->r.body_size - 2, j->tube->name);
+    else
+        reply_line(c, STATE_SEND_JOB, "%s %"PRIu64" %u\r\n", msg, j->r.id, j->r.body_size - 2);
 }
 
 // remove_waiting_conn unsets CONN_TYPE_WAITING for the connection,
@@ -783,6 +792,8 @@ static int
 which_cmd(Conn *c)
 {
 #define TEST_CMD(s,c,o) if (strncmp((s), (c), CONSTSTRLEN(c)) == 0) return (o);
+    TEST_CMD(c->cmd, CMD_PUT_IN_TUBE, OP_PUT_IN_TUBE);
+    TEST_CMD(c->cmd, CMD_SET_CAPABILITIES, OP_SET_CAPABILITIES);
     TEST_CMD(c->cmd, CMD_PUT, OP_PUT);
     TEST_CMD(c->cmd, CMD_PEEKJOB, OP_PEEKJOB);
     TEST_CMD(c->cmd, CMD_PEEK_READY, OP_PEEK_READY);
@@ -808,7 +819,7 @@ which_cmd(Conn *c)
     TEST_CMD(c->cmd, CMD_LIST_TUBES, OP_LIST_TUBES);
     TEST_CMD(c->cmd, CMD_QUIT, OP_QUIT);
     TEST_CMD(c->cmd, CMD_PAUSE_TUBE, OP_PAUSE_TUBE);
-    TEST_CMD(c->cmd, CMD_PUT_IN_TUBE, OP_PUT_IN_TUBE);
+
     return OP_UNKNOWN;
 }
 
@@ -955,6 +966,7 @@ fmt_stats(char *buf, size_t size, void *x)
                     global_stat.reserved_ct,
                     get_delayed_job_ct(),
                     global_stat.buried_ct,
+                    op_ct[OP_SET_CAPABILITIES],
                     op_ct[OP_PUT],
                     op_ct[OP_PUT_IN_TUBE],
                     op_ct[OP_PEEKJOB],
@@ -1319,6 +1331,14 @@ dispatch_cmd(Conn *c)
     }
 
     switch (type) {
+    case OP_SET_CAPABILITIES:
+        if (read_u32(&c->caps, c->cmd + CMD_SET_CAPABILITIES_LEN, &end_buf) != 0) {
+            reply_msg(c, MSG_BAD_FORMAT);
+            return;
+        }
+        reply_msg(c, MSG_OK);
+        return;
+
     case OP_PUT_IN_TUBE:
     case OP_PUT:
         if(type == OP_PUT)

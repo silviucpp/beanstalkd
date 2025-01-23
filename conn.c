@@ -54,6 +54,7 @@ make_conn(int fd, char start_state, Tube *use, Tube *watch)
     c->pending_timeout = -1;
     c->tickpos = 0; // Does not mean anything if in_conns is set to 0.
     c->in_conns = 0;
+    c->caps = 0;
 
     // The list is empty.
     job_list_reset(&c->reserved_jobs);
