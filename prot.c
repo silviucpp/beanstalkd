@@ -1309,7 +1309,7 @@ dispatch_cmd(Conn *c)
     uint count;
     Job *j = 0;
     byte type;
-    char *size_buf, *delay_buf, *ttr_buf, *pri_buf, *end_buf, *name;
+    char *size_buf, *delay_buf, *ttr_buf, *pri_buf, *end_buf, *name = NULL;
     uint32 pri;
     uint32 body_size;
     int64 delay, ttr;

@@ -12,7 +12,7 @@ make_tube(const char *name)
     if (!t)
         return NULL;
 
-    strncpy(t->name, name, MAX_TUBE_NAME_LEN);
+    strncpy(t->name, name, MAX_TUBE_NAME_LEN-1);
     if (t->name[MAX_TUBE_NAME_LEN - 1] != '\0') {
         t->name[MAX_TUBE_NAME_LEN - 1] = '\0';
         twarnx("truncating tube name");
